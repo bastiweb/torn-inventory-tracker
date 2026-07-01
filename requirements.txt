@@ -1,0 +1,6 @@
+discord.py
+tabulate
+pandas
+requests
+cryptography
+python-dotenv

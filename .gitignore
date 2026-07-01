@@ -1,6 +1,7 @@
 # Secrets / local config
 .env
 api_keys.json
+server_config.json
 
 # Python cache
 __pycache__/
@@ -11,10 +12,6 @@ __pycache__/
 .venv/
 venv/
 env/
-
-# Local generated inventory data
-Flower_inventory.json
-Plushie_inventory.json
 
 # Logs
 *.log

@@ -1,11 +1,10 @@
 import requests
-import json
 import pandas as pd
 from pandas import json_normalize
 
-def get_price_lookup():
-    url = "https://weav3r.dev/api/pricelist/4253363"
-    price_response = requests.get(url)
+def get_price_lookup(trader_id):
+    url = f"https://weav3r.dev/api/pricelist/{trader_id}"
+    price_response = requests.get(url, timeout=15)
     price_data = price_response.json()
     price_lookup = {}
 
@@ -17,22 +16,22 @@ def get_price_lookup():
 
     return price_lookup
 
-def inventory(api_key):
-    categorie = [
+def inventory(api_key, trader_id):
+    categories = [
     "Flower",
     "Plushie",
     ]
 
-    price_lookup = get_price_lookup()
+    price_lookup = get_price_lookup(trader_id)
 
     inventory_tables = {}
 
     def get_inventory_data(categorie):
         url = f"https://api.torn.com/v2/user/inventory?cat={categorie}&offset=0&limit=20&key={api_key}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=15)
         return response    
     # Iterate through all categories and fetch inventory data for each
-    for categorie in categorie:
+    for categorie in categories:
         response = get_inventory_data(categorie)
 
         data = response.json()

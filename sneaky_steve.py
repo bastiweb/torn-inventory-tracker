@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import tabulate
 import json
 import os
@@ -9,6 +10,21 @@ from inventory_checker import inventory
 
 load_dotenv()
 KEY_FILE = "api_keys.json"
+CONFIG_FILE = "server_config.json"
+
+def load_config():
+    if not os.path.exists(CONFIG_FILE):
+        return {}
+    
+    if os.path.getsize(CONFIG_FILE) == 0:
+        return {}
+    
+    with open(CONFIG_FILE, "r") as file:
+        return json.load(file)
+    
+def save_config(config):
+    with open(CONFIG_FILE, "w") as file:
+        json.dump(config, file, indent=4)
 
 def get_cipher():
     secret = os.environ["INVENTORY_BOT_SECRET"]
@@ -26,6 +42,9 @@ def decrypt_api_key(encrypted_key):
 
 def load_keys():
     if not os.path.exists(KEY_FILE):
+        return {}
+    
+    if os.path.getsize(KEY_FILE) == 0:
         return {}
     
     with open(KEY_FILE, "r") as file:
@@ -54,6 +73,30 @@ async def on_ready():
     await bot.tree.sync()
     print(f'We have logged in as {bot.user}')
 
+@bot.tree.command(name="settrader", description="Set the trader ID for price lookup")
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(trader_id="The Torn trader ID to use for price lookup")
+async def set_trader(interaction: discord.Interaction, trader_id: str):
+    if interaction.guild is None:
+        await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+        return
+    
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+    
+    if not trader_id.isdigit():
+        await interaction.response.send_message("Invalid trader ID. Please provide a numeric trader ID.", ephemeral=True)
+        return
+    
+    config = load_config()
+    guild_id = str(interaction.guild.id)
+
+    config[guild_id] = {"trader_id": trader_id}
+    save_config(config)
+
+    await interaction.response.send_message(f"Trader ID set to {trader_id} for this server.", ephemeral=True)
+
 @bot.tree.command(name="setkey", description="Set your Torn API key")
 async def setkey(interaction: discord.Interaction):
     await interaction.response.send_modal(ApiKeyModal())
@@ -63,6 +106,10 @@ async def setkey(interaction: discord.Interaction):
 async def inventory_command(interaction: discord.Interaction):
     await interaction.response.defer()
 
+    if interaction.guild is None:
+            await interaction.followup.send("This command can only be used in a server.", ephemeral=True)
+            return
+    
     keys = load_keys()
     user_id = str(interaction.user.id)
 
@@ -72,7 +119,17 @@ async def inventory_command(interaction: discord.Interaction):
     
     api_key = decrypt_api_key(keys[user_id])
 
-    inventories = inventory(api_key)
+    config = load_config()
+    
+    guild_id = str(interaction.guild.id)
+    
+
+    trader_id = config.get(guild_id, {}).get("trader_id")
+    if trader_id is None:
+        await interaction.followup.send("Trader ID not set for this server. Please set it using the `/settrader` command.", ephemeral=True)
+        return
+
+    inventories = inventory(api_key, trader_id)
     messages = []
 
     for categorie, dataframe in inventories.items():
@@ -86,7 +143,7 @@ async def inventory_command(interaction: discord.Interaction):
         )
         messages.append(f"```{categorie} Inventory:\n{table}```")
         
-    await interaction.followup.send("\n".join(messages)+"\n [Start a trade](https://www.torn.com/trade.php#step=start&userID=4253363)")
+    await interaction.followup.send("\n".join(messages)+f"\n [Start a trade](https://www.torn.com/trade.php#step=start&userID={trader_id})")
 
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
 
