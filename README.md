@@ -10,6 +10,7 @@ Users store their own Torn API key privately through Discord. Server admins conf
 - `/settrader` lets a server admin configure the Weav3r trader ID.
 - `/setcategories` lets a server admin configure which Torn inventory categories to check.
 - `/inventory` fetches the user's configured inventory categories and returns image tables.
+- `/inventory` also shows the max sale price across all returned categories.
 - Item prices are loaded from `https://weav3r.dev/api/pricelist/{trader_id}`.
 - User API keys are encrypted locally in `api_keys.json`.
 - Server settings are stored locally in `server_config.json`.

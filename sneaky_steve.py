@@ -250,20 +250,33 @@ async def inventory_command(interaction: discord.Interaction):
     inventories = inventory(api_key, trader_id, categories)
 
     files = []
+    max_sale_price = 0
 
     for category, dataframe in inventories.items():
+        if "total_value" in dataframe.columns:
+            max_sale_price += int(dataframe["total_value"].sum())
+
         image_buffer = dataframe_to_image(category, dataframe)
 
         files.append(discord.File(fp=image_buffer, filename=f"{category}_inventory.png"))
+
+    response_content = (
+        f"**Max sale price:** ${max_sale_price:,}\n"
+        f"[Start a trade](https://www.torn.com/trade.php#step=start&userID={trader_id})"
+    )
     
     if len(files) <= 10:
         await interaction.followup.send(
-            content = f"[Start a trade](https://www.torn.com/trade.php#step=start&userID={trader_id})",
+            content=response_content,
             files=files
         )
     else:
         await interaction.followup.send(
-            content = f"Inventory images exceed Discord's limit of 10 files per message. Please check the images below and start a trade using the link.\n[Start a trade](https://www.torn.com/trade.php#step=start&userID={trader_id})",
+            content=(
+                "Inventory images exceed Discord's limit of 10 files per message. "
+                "Please check the images below.\n"
+                f"{response_content}"
+            ),
             files=files[:10]
         )
 
