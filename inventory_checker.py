@@ -8,6 +8,9 @@ def get_price_lookup(trader_id):
     price_data = price_response.json()
     price_lookup = {}
 
+    if not isinstance(price_data, list):
+        raise ValueError(f"Invalid price list response: {price_data}")
+    
     for item in price_data:
         item_id = item["itemId"]
         price = item["buyPrice"]
@@ -16,41 +19,37 @@ def get_price_lookup(trader_id):
 
     return price_lookup
 
-def inventory(api_key, trader_id):
-    categories = [
-    "Flower",
-    "Plushie",
-    ]
-
+def inventory(api_key, trader_id, categories=["Flower", "Plushie"]):
+    
     price_lookup = get_price_lookup(trader_id)
 
     inventory_tables = {}
 
-    def get_inventory_data(categorie):
-        url = f"https://api.torn.com/v2/user/inventory?cat={categorie}&offset=0&limit=20&key={api_key}"
+    def get_inventory_data(category):
+        url = f"https://api.torn.com/v2/user/inventory?cat={category}&offset=0&limit=20&key={api_key}"
         response = requests.get(url, timeout=15)
         return response    
     # Iterate through all categories and fetch inventory data for each
-    for categorie in categories:
-        response = get_inventory_data(categorie)
+    for category in categories:
+        response = get_inventory_data(category)
 
         data = response.json()
         if "inventory" not in data:
             print(data)
             return {}
         #normalize the inventory data for the current category
-        categorie_json_inventory = json_normalize(data['inventory'])
+        category_json_inventory = json_normalize(data['inventory'])
         
-        categorie_json_items = json_normalize(categorie_json_inventory['items'].explode())
+        category_json_items = json_normalize(category_json_inventory['items'].explode())
 
         #map the price lookup to the items and calculate total value
-        categorie_json_items["price"] = categorie_json_items["id"].map(price_lookup)
-        categorie_json_items["amount"] = pd.to_numeric(categorie_json_items["amount"], errors='coerce').fillna(0)
-        categorie_json_items["price"] = pd.to_numeric(categorie_json_items["price"], errors='coerce').fillna(0)
-        categorie_json_items["total_value"] = categorie_json_items["amount"] * categorie_json_items["price"]
+        category_json_items["price"] = category_json_items["id"].map(price_lookup)
+        category_json_items["amount"] = pd.to_numeric(category_json_items["amount"], errors='coerce').fillna(0)
+        category_json_items["price"] = pd.to_numeric(category_json_items["price"], errors='coerce').fillna(0)
+        category_json_items["total_value"] = category_json_items["amount"] * category_json_items["price"]
 
-        categorie_json_items = categorie_json_items.drop(columns=['id', 'equipped', 'uid', 'faction_owned'], errors='ignore')
+        category_json_items = category_json_items.drop(columns=['id', 'equipped', 'uid', 'faction_owned'], errors='ignore')
         
-        inventory_tables[categorie] = categorie_json_items
+        inventory_tables[category] = category_json_items
 
     return inventory_tables

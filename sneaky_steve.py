@@ -1,9 +1,12 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import tabulate
 import json
 import os
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from io import BytesIO
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
 from inventory_checker import inventory
@@ -54,6 +57,89 @@ def save_keys(keys):
     with open(KEY_FILE, "w") as file:
         json.dump(keys, file, indent=4)
 
+def dataframe_to_image(category, dataframe):
+    display_df = dataframe.copy()
+
+    column_names = {
+        "amount": "Amount",
+        "name": "Item",
+        "price": "Price",
+        "total_value": "Total Value"
+    }
+    display_df = display_df.rename(columns=column_names)
+
+    for column in ["Amount", "Price", "Total Value"]:
+        if column in display_df.columns:
+            display_df[column] = display_df[column].map(lambda value: f"{int(value):,}")
+
+    row_count = max(len(display_df), 1)
+    fig_width = 10.5
+    fig_height = max(2.4, row_count * 0.46 + 1.4)
+
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+    fig.patch.set_facecolor("#111827")
+    ax.set_facecolor("#111827")
+    ax.axis("off")
+
+    fig.subplots_adjust(left=0.03, right=0.97, top=0.76, bottom=0.10)
+
+    fig.suptitle(
+        f"{category} Inventory",
+        fontsize=22,
+        fontweight="bold",
+        color="#f8fafc",
+        y=0.94
+    )
+
+    table = ax.table(
+        cellText=display_df.values,
+        colLabels=display_df.columns,
+        cellLoc="center",
+        loc="center",
+        zorder=2,
+        edges="closed"
+    )
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(11)
+    table.scale(1, 1.45)
+
+    for (row, col), cell in table.get_celld().items():
+        cell.set_linewidth(0.6)
+        cell.set_edgecolor("#334155")
+
+        if row == 0:
+            cell.set_facecolor("#1e293b")
+            cell.set_text_props(weight="bold", color="#f8fafc")
+        else:
+            if row % 2 == 0:
+                cell.set_facecolor("#111827")
+            else:
+                cell.set_facecolor("#172033")
+
+            cell.set_text_props(color="#e5e7eb")
+
+            column_name = display_df.columns[col]
+            if column_name == "Total Value":
+                cell.set_text_props(weight="bold", color="#34d399")
+            elif column_name == "Price":
+                cell.set_text_props(color="#93c5fd")
+
+    buffer = BytesIO()
+    plt.savefig(
+        buffer,
+        format="png",
+        dpi=170,
+        facecolor="#111827",
+        edgecolor="none",
+        bbox_inches=None,
+        pad_inches=0
+    )
+    plt.close(fig)
+
+    buffer.seek(0)
+    return buffer
+
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='/', intents=intents)
 
@@ -92,10 +178,41 @@ async def set_trader(interaction: discord.Interaction, trader_id: str):
     config = load_config()
     guild_id = str(interaction.guild.id)
 
-    config[guild_id] = {"trader_id": trader_id}
+    server_config = config.get(guild_id, {})
+    server_config["trader_id"] = trader_id
+    config[guild_id] = server_config
     save_config(config)
 
     await interaction.response.send_message(f"Trader ID set to {trader_id} for this server.", ephemeral=True)
+
+@bot.tree.command(name="setcategories", description="Set the categories for inventory lookup")
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(categories="Comma-separated list of categories to check (e.g., Flower,Plushie)")
+async def set_categories(interaction: discord.Interaction, categories: str):
+    if interaction.guild is None:
+        await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+        return
+    
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+        return
+    
+    category_list = [cat.strip() for cat in categories.split(",") if cat.strip()]
+    
+    if not category_list:
+        await interaction.response.send_message("No valid categories provided. Please provide at least one category.", ephemeral=True)
+        return
+    
+    config = load_config()
+    guild_id = str(interaction.guild.id)
+
+    if guild_id not in config:
+        config[guild_id] = {}
+    
+    config[guild_id]["categories"] = category_list
+    save_config(config)
+
+    await interaction.response.send_message(f"Categories set to {', '.join(category_list)} for this server.", ephemeral=True)
 
 @bot.tree.command(name="setkey", description="Set your Torn API key")
 async def setkey(interaction: discord.Interaction):
@@ -113,37 +230,42 @@ async def inventory_command(interaction: discord.Interaction):
     keys = load_keys()
     user_id = str(interaction.user.id)
 
+    config = load_config()
+    guild_id = str(interaction.guild.id)
+
+    server_config = config.get(guild_id, {})
+    trader_id = server_config.get("trader_id")
+    categories = server_config.get("categories", ["Flower", "Plushie"])
+
     if user_id not in keys:
         await interaction.followup.send("API key not found for your user. Please provide your API key using the `/setkey` command.", ephemeral=True)
         return
     
     api_key = decrypt_api_key(keys[user_id])
 
-    config = load_config()
-    
-    guild_id = str(interaction.guild.id)
-    
-
-    trader_id = config.get(guild_id, {}).get("trader_id")
     if trader_id is None:
         await interaction.followup.send("Trader ID not set for this server. Please set it using the `/settrader` command.", ephemeral=True)
         return
 
-    inventories = inventory(api_key, trader_id)
-    messages = []
+    inventories = inventory(api_key, trader_id, categories)
 
-    for categorie, dataframe in inventories.items():
-        table = tabulate.tabulate(
-            dataframe, 
-            headers='keys', 
-            tablefmt='grid', 
-            showindex=False, 
-            intfmt=',',
-            floatfmt=',.0f'
+    files = []
+
+    for category, dataframe in inventories.items():
+        image_buffer = dataframe_to_image(category, dataframe)
+
+        files.append(discord.File(fp=image_buffer, filename=f"{category}_inventory.png"))
+    
+    if len(files) <= 10:
+        await interaction.followup.send(
+            content = f"[Start a trade](https://www.torn.com/trade.php#step=start&userID={trader_id})",
+            files=files
         )
-        messages.append(f"```{categorie} Inventory:\n{table}```")
-        
-    await interaction.followup.send("\n".join(messages)+f"\n [Start a trade](https://www.torn.com/trade.php#step=start&userID={trader_id})")
+    else:
+        await interaction.followup.send(
+            content = f"Inventory images exceed Discord's limit of 10 files per message. Please check the images below and start a trade using the link.\n[Start a trade](https://www.torn.com/trade.php#step=start&userID={trader_id})",
+            files=files[:10]
+        )
 
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
 
