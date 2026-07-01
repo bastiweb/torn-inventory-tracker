@@ -37,7 +37,6 @@ def save_keys(keys):
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='/', intents=intents)
-#intents.message_content = True
 
 class ApiKeyModal(discord.ui.Modal, title="Enter your API Key"):
     api_key = discord.ui.TextInput(label="API Key", placeholder="Enter your Torn API Key here")
@@ -62,7 +61,7 @@ async def setkey(interaction: discord.Interaction):
 
 @bot.tree.command(name="inventory", description="Check your Torn inventory")
 async def inventory_command(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
+    await interaction.response.defer(ephemeral=False)
 
     keys = load_keys()
     user_id = str(interaction.user.id)
@@ -87,7 +86,7 @@ async def inventory_command(interaction: discord.Interaction):
         )
         messages.append(f"```{categorie} Inventory:\n{table}```")
         
-    await interaction.followup.send("\n".join(messages))
+    await interaction.followup.send("\n".join(messages)+"\n [Start a trade](https://www.torn.com/trade.php#step=start&userID=4253363)")
 
 bot.run(os.environ["DISCORD_BOT_TOKEN"])
 

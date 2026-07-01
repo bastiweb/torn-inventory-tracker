@@ -31,7 +31,7 @@ def inventory(api_key):
         url = f"https://api.torn.com/v2/user/inventory?cat={categorie}&offset=0&limit=20&key={api_key}"
         response = requests.get(url)
         return response    
-
+    # Iterate through all categories and fetch inventory data for each
     for categorie in categorie:
         response = get_inventory_data(categorie)
 
@@ -39,11 +39,12 @@ def inventory(api_key):
         if "inventory" not in data:
             print(data)
             return {}
-        
+        #normalize the inventory data for the current category
         categorie_json_inventory = json_normalize(data['inventory'])
         
         categorie_json_items = json_normalize(categorie_json_inventory['items'].explode())
 
+        #map the price lookup to the items and calculate total value
         categorie_json_items["price"] = categorie_json_items["id"].map(price_lookup)
         categorie_json_items["amount"] = pd.to_numeric(categorie_json_items["amount"], errors='coerce').fillna(0)
         categorie_json_items["price"] = pd.to_numeric(categorie_json_items["price"], errors='coerce').fillna(0)
@@ -54,4 +55,3 @@ def inventory(api_key):
         inventory_tables[categorie] = categorie_json_items
 
     return inventory_tables
-        #print(categorie_json_items.head())
