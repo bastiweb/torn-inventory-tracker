@@ -1,36 +1,79 @@
 # Torn Inventory Discord Bot
 
-A small Python Discord bot for checking Torn inventory values for flowers and plushies. Users can save their Torn API key through Discord, then request a formatted inventory value table.
+A Python Discord bot for checking Torn inventory values with trader-specific prices from the Weav3r price list API.
+
+Users store their own Torn API key privately through Discord. Server admins configure which trader price list and inventory categories the server should use. Inventory results are sent back as dark-mode table images, one image per category.
 
 ## Features
 
-- `/setkey` opens a private modal for storing a Torn API key.
-- `/inventory` fetches the user's Torn flower and plushie inventory.
-- Item prices are loaded from the Weav3r price list API.
-- API keys are encrypted locally in `api_keys.json`.
+- `/setkey` opens a private modal for saving or updating a user's Torn API key.
+- `/settrader` lets a server admin configure the Weav3r trader ID.
+- `/setcategories` lets a server admin configure which Torn inventory categories to check.
+- `/inventory` fetches the user's configured inventory categories and returns image tables.
+- Item prices are loaded from `https://weav3r.dev/api/pricelist/{trader_id}`.
+- User API keys are encrypted locally in `api_keys.json`.
+- Server settings are stored locally in `server_config.json`.
+
+## Project Files
+
+- `sneaky_steve.py` - Discord bot, slash commands, config handling, encryption, and image rendering.
+- `inventory_checker.py` - Torn and Weav3r API calls plus inventory value calculation.
+- `requirements.txt` - Python dependencies.
+- `.env.example` - Example environment variables.
+- `api_keys.json` - Local encrypted user API key storage. Do not commit.
+- `server_config.json` - Local server configuration. Do not commit.
 
 ## Setup
 
-1. Create and activate a virtual environment.
-2. Install the required packages:
+Create and activate a virtual environment:
 
 ```bash
-pip install discord.py requests pandas tabulate python-dotenv cryptography
+python -m venv .venv
 ```
 
-3. Copy `.env.example` to `.env`.
-4. Add your Discord bot token and an encryption secret:
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Linux / Raspberry Pi:
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Copy `.env.example` to `.env` and fill in the values:
 
 ```env
-DISCORD_BOT_TOKEN=your_discord_bot_token
 INVENTORY_BOT_SECRET=your_fernet_secret
+DISCORD_BOT_TOKEN=your_discord_bot_token
 ```
 
-Generate a Fernet secret with:
+Generate a Fernet encryption secret with:
 
 ```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
+
+Keep this secret safe. If it changes, previously saved user API keys cannot be decrypted anymore and users will need to run `/setkey` again.
+
+## Discord Bot Setup
+
+When inviting the bot to a server, include these OAuth scopes:
+
+```text
+bot
+applications.commands
+```
+
+The bot uses Discord slash commands. Global slash command updates can take a while to appear in Discord after restarting the bot.
 
 ## Running
 
@@ -38,9 +81,45 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 python sneaky_steve.py
 ```
 
-When the bot is online, use `/setkey` in Discord first, then `/inventory` to check inventory values.
+After the bot is online:
 
-## Notes
+1. A server admin runs `/settrader` with the desired trader ID.
+2. A server admin runs `/setcategories` with categories such as `Flower,Plushie`.
+3. Each user runs `/setkey` to save their own Torn API key.
+4. Users run `/inventory` to receive inventory value images.
 
-- `.env` and `api_keys.json` are local secret files and should not be committed.
-- The inventory checker currently focuses on `Flower` and `Plushie` categories.
+## Category Configuration
+
+Categories are configured per Discord server with `/setcategories`.
+
+Example:
+
+```text
+Flower,Plushie,Drug,Other
+```
+
+The category names must match values accepted by the Torn inventory API.
+
+## Local Data And Secrets
+
+These files are intentionally ignored by Git:
+
+```text
+.env
+api_keys.json
+server_config.json
+```
+
+Do not publish your Discord bot token, Torn API keys, or `INVENTORY_BOT_SECRET`.
+
+If a token or key was exposed, rotate it immediately.
+
+## Raspberry Pi Notes
+
+The bot can run on a Raspberry Pi without keeping VS Code open. Install Python, copy the project, create a virtual environment, install `requirements.txt`, create the `.env`, and run:
+
+```bash
+python sneaky_steve.py
+```
+
+For long-running use, run it with `tmux`, `screen`, or a `systemd` service.
