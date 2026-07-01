@@ -61,7 +61,7 @@ async def setkey(interaction: discord.Interaction):
 
 @bot.tree.command(name="inventory", description="Check your Torn inventory")
 async def inventory_command(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=False)
+    await interaction.response.defer()
 
     keys = load_keys()
     user_id = str(interaction.user.id)
