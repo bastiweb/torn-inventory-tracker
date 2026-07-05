@@ -68,9 +68,13 @@ def dataframe_to_image(category, dataframe):
     }
     display_df = display_df.rename(columns=column_names)
 
-    for column in ["Amount", "Price", "Total Value"]:
-        if column in display_df.columns:
-            display_df[column] = display_df[column].map(lambda value: f"{int(value):,}")
+    if display_df.empty:
+        display_df = display_df.reindex(columns=["Amount", "Item", "Price", "Total Value"])
+        display_df.loc[0] = ["-", "No items", "-", "-"]
+    else:
+        for column in ["Amount", "Price", "Total Value"]:
+            if column in display_df.columns:
+                display_df[column] = display_df[column].map(lambda value: f"{int(value):,}")
 
     row_count = max(len(display_df), 1)
     fig_width = 10.5
@@ -280,5 +284,6 @@ async def inventory_command(interaction: discord.Interaction):
             files=files[:10]
         )
 
-bot.run(os.environ["DISCORD_BOT_TOKEN"])
+if __name__ == "__main__":
+    bot.run(os.environ["DISCORD_BOT_TOKEN"])
 

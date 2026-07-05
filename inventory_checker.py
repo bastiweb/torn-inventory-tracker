@@ -37,10 +37,23 @@ def inventory(api_key, trader_id, categories=["Flower", "Plushie"]):
         if "inventory" not in data:
             print(data)
             return {}
+        inventory_data = data.get("inventory", {})
+        items = inventory_data.get("items", [])
+
+        if not items:
+            inventory_tables[category] = pd.DataFrame(
+                columns=["amount", "name", "price", "total_value"]
+            )
+            continue
+
         #normalize the inventory data for the current category
-        category_json_inventory = json_normalize(data['inventory'])
-        
-        category_json_items = json_normalize(category_json_inventory['items'].explode())
+        category_json_items = json_normalize(items)
+
+        if "id" not in category_json_items.columns:
+            inventory_tables[category] = pd.DataFrame(
+                columns=["amount", "name", "price", "total_value"]
+            )
+            continue
 
         #map the price lookup to the items and calculate total value
         category_json_items["price"] = category_json_items["id"].map(price_lookup)
